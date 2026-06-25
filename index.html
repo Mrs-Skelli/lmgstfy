@@ -6,6 +6,12 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'">
 <title>Let Me GitHub Search That For You</title>
 <meta name="description" content="For colleagues who could have just searched GitHub themselves. Generate a passive-aggressive link, send it, let it do the talking.">
+<meta name="keywords" content="lmgstfy, let me github search that for you, lmgtfy for github, github search link generator, passive aggressive github search">
+<meta name="robots" content="index, follow">
+<meta name="author" content="lmgstfy.fun">
+<!-- Canonical: collapses every ?q=... share link back to the homepage so Google
+     indexes one URL, not thousands of thin query permutations. -->
+<link rel="canonical" href="https://lmgstfy.fun/">
 
 <!-- Favicon (magnifying glass) -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%2358a6ff' d='M11.7 10.3a6 6 0 1 0-1.4 1.4l3 3a1 1 0 0 0 1.4-1.4zM3 7a4 4 0 1 1 8 0 4 4 0 0 1-8 0'/%3E%3C/svg%3E">
@@ -24,6 +30,23 @@
 <meta name="twitter:description" content="You could have searched this yourself. But here we are. Click to watch.">
 <meta name="twitter:image" content="https://lmgstfy.fun/og-image.png">
 <meta name="theme-color" content="#0d1117">
+
+<!-- Structured data: helps Google understand this is a free web app -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Let Me GitHub Search That For You",
+  "alternateName": "LMGSTFY",
+  "url": "https://lmgstfy.fun/",
+  "description": "Generate a passive-aggressive link that animates a slow GitHub search, then redirects to the real results. For colleagues who could have just searched GitHub themselves.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any",
+  "browserRequirements": "Requires JavaScript",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
 
 <style>
   :root {
