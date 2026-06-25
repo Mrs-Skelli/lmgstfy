@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'">
 <title>Let Me GitHub Search That For You</title>
 <meta name="description" content="For colleagues who could have just searched GitHub themselves. Generate a passive-aggressive link, send it, let it do the talking.">
 
@@ -251,26 +252,46 @@
 (function () {
   "use strict";
 
+  // Doubles as the allow-list of valid search types (keys validated below).
   var TYPE_LABELS = {
     code: "Code", repositories: "Repositories", issues: "Issues",
     pullrequests: "Pull requests", commits: "Commits", discussions: "Discussions",
     wikis: "Wikis", registrypackages: "Packages", users: "Users"
   };
 
-  // Build the real GitHub search URL from the encoded params.
+  // --- Input hardening: every URL param is attacker-controllable (the whole
+  // point is sending crafted links), so validate before use. ---
+  // GitHub usernames/orgs: 1–39 chars, alphanumerics and hyphens only. This
+  // also blocks search-qualifier injection into the `user:` prefix.
+  var USER_RE = /^[A-Za-z0-9-]{1,39}$/;
+  function sanitizeUser(u) { return USER_RE.test(u || "") ? u : ""; }
+  function sanitizeType(t) {
+    return Object.prototype.hasOwnProperty.call(TYPE_LABELS, t) ? t : "repositories";
+  }
+
+  // Clickjacking defense: GitHub Pages can't send X-Frame-Options and
+  // frame-ancestors is ignored in <meta>, so bust out of any frame in JS.
+  if (window.top !== window.self) {
+    try { window.top.location = window.self.location; }
+    catch (e) { document.documentElement.style.display = "none"; }
+  }
+
+  // Build the real GitHub search URL from the (now validated) params.
+  // Host/scheme are hardcoded and both interpolations are encodeURIComponent'd,
+  // so this can only ever navigate to github.com search — never off-site.
   function buildGithubUrl(q, user, type) {
-    var query = q;
-    if (user) query = "user:" + user + " " + q;
-    var u = "https://github.com/search?q=" + encodeURIComponent(query) + "&type=" + encodeURIComponent(type || "repositories");
-    return u;
+    user = sanitizeUser(user);
+    type = sanitizeType(type);
+    var query = user ? ("user:" + user + " " + q) : q;
+    return "https://github.com/search?q=" + encodeURIComponent(query) + "&type=" + encodeURIComponent(type);
   }
 
   function getParams() {
     var p = new URLSearchParams(window.location.search);
     return {
       q: p.get("q") || "",
-      user: p.get("u") || "",
-      type: p.get("t") || "repositories"
+      user: sanitizeUser(p.get("u") || ""),
+      type: sanitizeType(p.get("t") || "repositories")
     };
   }
 
@@ -298,7 +319,7 @@
       if (!q) { qEl.focus(); return null; }
       var params = new URLSearchParams();
       params.set("q", q);
-      if (scope === "user" && userEl.value.trim()) params.set("u", userEl.value.trim());
+      if (scope === "user" && USER_RE.test(userEl.value.trim())) params.set("u", userEl.value.trim());
       params.set("t", typeEl.value);
       var base = window.location.origin + window.location.pathname;
       return base + "?" + params.toString();
