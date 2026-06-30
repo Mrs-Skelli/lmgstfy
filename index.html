@@ -439,34 +439,37 @@
 
     var line = pickLine(q + type);
 
-    // --- Compressed ~2.5s timeline: type fast, land the line, hold an
-    // awkward beat, then auto-redirect to the real results. ---
-    var TYPE_START = 350;     // typing begins
-    var TYPE_END = 1250;      // typing finishes (~0.9s window, any length)
-    var THERE_AT = 1450;      // the payoff line
-    var AWKWARD_AT = 1900;    // the slightly awkward pause
-    var REDIRECT_AT = 2500;   // total runtime
+    // --- Readable timeline: every beat is held long enough to actually read.
+    // Beats after typing are computed off the (length-dependent) typing time. ---
+    var line1At = 0;          // first snark line + cursor to search bar
+    var line2At = 550;        // second line, once the first has landed
+    var typeStart = 1400;     // start typing after the lines are readable
+    // Natural ~60ms/char typing, capped so very long queries don't drag on.
+    var perChar = q.length ? Math.min(60, 2200 / q.length) : 0;
+    var typeEnd = typeStart + perChar * q.length;
+    var thereAt = typeEnd + 550;       // beat, then the payoff
+    var awkwardAt = thereAt + 1100;    // hold the payoff so it's readable
+    var redirectAt = awkwardAt + 1300; // hold the awkward beat, then go
 
-    // Snarky line + cursor straight to the search bar.
-    after(0, function () {
+    // Snarky line + cursor to the search bar.
+    after(line1At, function () {
       bigText.textContent = line[0];
       cursor.style.left = "46%"; cursor.style.top = "8%";
     });
-    after(150, function () { smallText.textContent = line[1]; });
+    after(line2At, function () { smallText.textContent = line[1]; });
 
-    // Type the query char by char, scaled to fit the window.
-    var perChar = q.length ? (TYPE_END - TYPE_START) / q.length : 0;
+    // Type the query char by char, at a readable pace.
     for (var i = 0; i < q.length; i++) {
       (function (idx) {
-        after(TYPE_START + perChar * idx, function () {
+        after(typeStart + perChar * idx, function () {
           typed.textContent = q.slice(0, idx + 1);
           progBar.style.width = Math.min(80, 15 + (idx / Math.max(1, q.length)) * 65) + "%";
         });
       })(i);
     }
 
-    // The payoff.
-    after(THERE_AT, function () {
+    // The payoff — held long enough to read.
+    after(thereAt, function () {
       bigText.textContent = "There.";
       smallText.textContent = "Was that so hard?";
       cursor.style.left = "52%"; cursor.style.top = "9%";
@@ -474,7 +477,7 @@
     });
 
     // The slightly awkward pause — nothing happens, on purpose.
-    after(AWKWARD_AT, function () {
+    after(awkwardAt, function () {
       smallText.textContent = "…anyway.";
       progBar.style.width = "100%";
     });
@@ -491,7 +494,7 @@
     }
 
     // Auto-redirect after the awkward beat (preview just shows a note instead).
-    after(REDIRECT_AT, function () {
+    after(redirectAt, function () {
       if (isPreview) {
         smallText.textContent = "(Preview — would now redirect to GitHub.)";
         replayNote.style.display = "block";
