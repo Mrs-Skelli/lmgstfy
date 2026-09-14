@@ -371,6 +371,7 @@
     var typeEl = document.getElementById("type");
     var seg = document.getElementById("scopeSeg");
     var scope = "all";
+    var typeChosen = false;
     var kindEl = document.getElementById("scopeKind");
     var errorEl = document.getElementById("searchError");
     var destination = document.getElementById("destination");
@@ -391,11 +392,15 @@
     kindEl.addEventListener("change", updateKind);
     qEl.addEventListener("input", invalidate);
     userEl.addEventListener("input", invalidate);
-    typeEl.addEventListener("change", function () {
+    function updateTypeHint() {
       document.getElementById("typeHint").textContent = typeEl.value === "code" ?
         "Search inside files. GitHub requires sign-in, and results depend on the recipient's repository access." :
         (typeEl.value === "repositories" ? "Find repositories by name, description, or topics. Choose Code to search inside files." : "Search GitHub " + TYPE_LABELS[typeEl.value].toLowerCase() + ".");
       invalidate();
+    }
+    typeEl.addEventListener("change", function () {
+      typeChosen = true;
+      updateTypeHint();
     });
     seg.addEventListener("click", function (e) {
       var b = e.target.closest("button");
@@ -403,7 +408,8 @@
       scope = b.getAttribute("data-scope");
       Array.prototype.forEach.call(seg.children, function (c) { c.classList.toggle("active", c === b); });
       userWrap.style.display = scope === "user" ? "" : "none";
-      invalidate();
+      if (!typeChosen) typeEl.value = scope === "user" ? "code" : "repositories";
+      updateTypeHint();
     });
 
     function makeLink() {

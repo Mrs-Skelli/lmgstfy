@@ -72,3 +72,61 @@ test('unsupported search types fall back to repositories', () => {
     assert.equal(new URL(buildGithubUrl('auth', '', t)).searchParams.get('type'), 'repositories');
   }
 });
+
+function creator() {
+  const elements = new Map();
+  function element(id) {
+    if (!elements.has(id)) elements.set(id, {
+      value: '', style: {}, listeners: {}, children: [],
+      addEventListener(event, listener) { this.listeners[event] = listener; },
+      removeAttribute() {}, scrollIntoView() {},
+    });
+    return elements.get(id);
+  }
+  element('type').value = 'repositories';
+  element('scopeKind').value = 'org';
+  const win = { location: { search: '', origin: 'https://lmgstfy.fun', pathname: '/' } };
+  win.top = win.self = win;
+  vm.runInNewContext(script, { window: win, document: { getElementById: element }, URL, URLSearchParams });
+  return {
+    element,
+    scope(value) {
+      element('scopeSeg').listeners.click({ target: { closest() { return { getAttribute() { return value; } }; } } });
+    },
+    type(value) {
+      element('type').value = value;
+      element('type').listeners.change();
+    },
+  };
+}
+
+test('Our repos defaults to Code and generates the reported repository search', () => {
+  const ui = creator();
+  ui.scope('user');
+  assert.equal(ui.element('type').value, 'code');
+  ui.element('q').value = 'cve-2024-13346';
+  ui.element('user').value = 'hadriansecurity/nuclei-templates';
+  ui.element('genBtn').listeners.click();
+  const shared = new URL(ui.element('genLink').value);
+  assert.equal(shared.searchParams.get('s'), 'repo');
+  assert.equal(shared.searchParams.get('t'), 'code');
+  assert.equal(new URL(ui.element('destination').href).searchParams.get('q'), 'repo:hadriansecurity/nuclei-templates cve-2024-13346');
+});
+test('scope defaults follow the selected scope until a type is chosen', () => {
+  const ui = creator();
+  ui.scope('user');
+  ui.scope('all');
+  assert.equal(ui.element('type').value, 'repositories');
+  ui.scope('user');
+  assert.equal(ui.element('type').value, 'code');
+});
+test('explicit search type is preserved across scope changes', () => {
+  for (const type of ['issues', 'repositories', 'code']) {
+    const ui = creator();
+    ui.type(type);
+    ui.scope('user');
+    assert.equal(ui.element('type').value, type);
+    ui.scope('all');
+    assert.equal(ui.element('type').value, type);
+  }
+});

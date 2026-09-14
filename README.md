@@ -33,7 +33,7 @@ https://lmgstfy.fun/?q=how+does+auth+work&u=acme-corp&s=org&t=code
 
 Open with no `q` → the **creator** UI. Open with a `q` → the **player** animation, then a redirect to `github.com/search`.
 
-Choose **Repositories** to find repositories by name, description, or topics; choose **Code** to search inside files. Code search requires the recipient to sign in to GitHub. Private repository results depend on that person's existing access.
+**Our repos** defaults to **Code** unless you explicitly chose another search type. Choose **Repositories** to find repositories by name, description, or topics; choose **Code** to search inside files. Code search requires the recipient to sign in to GitHub. Private repository results depend on that person's existing access.
 
 ## Checks
 
