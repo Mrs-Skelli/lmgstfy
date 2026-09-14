@@ -8,7 +8,8 @@ Live at **[lmgstfy.fun](https://lmgstfy.fun)**.
 
 ## Features
 
-- **Two scopes** — search all of GitHub, or scope to a specific org/user's repos (`user:whoever`).
+- **Two scopes** — search all of GitHub, or choose an organization (`org:acme`), user (`user:octocat`), or repository (`repo:acme/project`). GitHub URLs work too.
+- **Validated scope** — empty or invalid scoped input shows an error instead of silently searching all of GitHub. The generated link includes a visible GitHub destination; editing the form hides stale output.
 - **All search types** — Code, Repositories, Issues, PRs, Commits, Discussions, Wikis, Packages, Users.
 - **Self-contained** — one `index.html`, no server, no build, no tracking. The query is encoded entirely in the link.
 - **Deterministic snark** — the passive-aggressive lines are picked from the query, so a given link always plays the same.
@@ -20,16 +21,23 @@ Live at **[lmgstfy.fun](https://lmgstfy.fun)**.
 The generated link looks like:
 
 ```
-https://lmgstfy.fun/?q=how+does+auth+work&u=acme-corp&t=code
+https://lmgstfy.fun/?q=how+does+auth+work&u=acme-corp&s=org&t=code
 ```
 
 | Param | Meaning |
 |-------|---------|
 | `q`   | the search query |
-| `u`   | (optional) org/username to scope to; omit for all of GitHub |
+| `u`   | (optional) organization, username, or owner/repository; omit for all of GitHub |
+| `s`   | scope kind: `org`, `user`, or `repo`. Old links without `s` retain `user:` behavior |
 | `t`   | GitHub search type (`code`, `repositories`, `issues`, …) |
 
 Open with no `q` → the **creator** UI. Open with a `q` → the **player** animation, then a redirect to `github.com/search`.
+
+**Our repos** defaults to **Code** unless you explicitly chose another search type. Choose **Repositories** to find repositories by name, description, or topics; choose **Code** to search inside files. Code search requires the recipient to sign in to GitHub. Private repository results depend on that person's existing access.
+
+## Checks
+
+Run `node --test tests/search.test.cjs` for URL construction, input validation, and legacy-link regressions. For browser checks, serve the folder locally and exercise generation, preview, invalid input, and a shared-link redirect.
 
 ## Files
 

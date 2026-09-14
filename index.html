@@ -203,7 +203,7 @@
 
   <div class="card">
     <div class="row">
-      <label>What did they <em>absolutely could not</em> look up themselves?</label>
+      <label for="q">What could they <em>absolutely not</em> look up themselves?</label>
       <input type="text" id="q" placeholder="e.g. how does the auth middleware work" autocomplete="off">
     </div>
 
@@ -216,13 +216,20 @@
         </div>
       </div>
       <div id="userWrap" style="display:none;">
-        <label>Org / username <span class="hint">(whose repos)</span></label>
-        <input type="text" id="user" placeholder="e.g. acme-corp" autocomplete="off">
+        <label for="scopeKind">Search within</label>
+        <select id="scopeKind">
+          <option value="org">An organization</option>
+          <option value="user">A user's repositories</option>
+          <option value="repo">One repository</option>
+        </select>
+        <label for="user" id="userLabel" style="margin-top:12px;">Organization</label>
+        <input type="text" id="user" placeholder="e.g. acme-corp" autocomplete="off" aria-describedby="scopeHint searchError">
+        <p class="hint" id="scopeHint">Enter the GitHub name or paste its GitHub URL.</p>
       </div>
     </div>
 
     <div class="row">
-      <label>Search type</label>
+      <label for="type">Search type</label>
       <select id="type">
         <option value="code">Code</option>
         <option value="repositories" selected>Repositories</option>
@@ -234,8 +241,10 @@
         <option value="registrypackages">Packages</option>
         <option value="users">Users</option>
       </select>
+      <p class="hint" id="typeHint">Find repositories by name, description, or topics. Choose Code to search inside files.</p>
     </div>
 
+    <p id="searchError" role="alert" style="color:#ff7b72;" hidden></p>
     <button class="gen-btn" id="genBtn">Generate the link they didn't deserve →</button>
 
     <div id="output">
@@ -246,6 +255,7 @@
           <button class="mini primary" id="copyBtn">Copy</button>
         </div>
       </div>
+      <p class="hint">Destination: <a id="destination" target="_blank" rel="noopener noreferrer" style="color:var(--accent);overflow-wrap:anywhere;"></a></p>
       <div class="out-actions">
         <button class="mini" id="previewBtn">▶ Preview the animation</button>
         <span class="copied" id="copiedMsg" style="display:none;">Copied. Go ruin their day.</span>
@@ -296,10 +306,29 @@
 
   // --- Input hardening: every URL param is attacker-controllable (the whole
   // point is sending crafted links), so validate before use. ---
-  // GitHub usernames/orgs: 1–39 chars, alphanumerics and hyphens only. This
-  // also blocks search-qualifier injection into the `user:` prefix.
-  var USER_RE = /^[A-Za-z0-9-]{1,39}$/;
-  function sanitizeUser(u) { return USER_RE.test(u || "") ? u : ""; }
+  // Normalize only GitHub account/repository names and their public URL shape.
+  var USER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+  var REPO_RE = /^[A-Za-z0-9._-]{1,100}$/;
+  function parseScope(value, kind) {
+    value = (value || "").trim();
+    if (!value) throw new Error("Enter an organization, username, or repository for Our repos.");
+    if (/^https?:\/\//i.test(value)) {
+      var url = new URL(value);
+      if (url.hostname !== "github.com" || url.username || url.password || url.port) {
+        throw new Error("Paste a github.com organization, user, or repository URL.");
+      }
+      value = url.pathname.replace(/^\/|\/$/g, "");
+    }
+    var parts = value.split("/");
+    if (!USER_RE.test(parts[0]) || parts[0].indexOf("--") !== -1 || parts.length > 2 ||
+        (parts.length === 2 && (!REPO_RE.test(parts[1]) || /^\.{1,2}$/.test(parts[1])))) {
+      throw new Error("Use a GitHub name or owner/repository, such as acme-corp/project.");
+    }
+    if (["org", "user", "repo"].indexOf(kind) === -1) throw new Error("Choose an organization, user, or repository scope.");
+    if (parts.length === 2) kind = "repo";
+    if (kind === "repo" && parts.length !== 2) throw new Error("Enter the full repository name: owner/repository.");
+    return { value: value, kind: kind };
+  }
   function sanitizeType(t) {
     return Object.prototype.hasOwnProperty.call(TYPE_LABELS, t) ? t : "repositories";
   }
@@ -314,18 +343,22 @@
   // Build the real GitHub search URL from the (now validated) params.
   // Host/scheme are hardcoded and both interpolations are encodeURIComponent'd,
   // so this can only ever navigate to github.com search — never off-site.
-  function buildGithubUrl(q, user, type) {
-    user = sanitizeUser(user);
+  function buildGithubUrl(q, user, type, kind) {
     type = sanitizeType(type);
-    var query = user ? ("user:" + user + " " + q) : q;
+    var query = q;
+    if (user || kind) {
+      var scope = parseScope(user, kind || "user");
+      query = scope.kind + ":" + scope.value + " " + q;
+    }
     return "https://github.com/search?q=" + encodeURIComponent(query) + "&type=" + encodeURIComponent(type);
   }
 
-  function getParams() {
-    var p = new URLSearchParams(window.location.search);
+  function getParams(search) {
+    var p = new URLSearchParams(search);
     return {
       q: p.get("q") || "",
-      user: sanitizeUser(p.get("u") || ""),
+      user: p.get("u") || "",
+      kind: p.get("s") || (p.has("u") ? "user" : ""),
       type: sanitizeType(p.get("t") || "repositories")
     };
   }
@@ -338,15 +371,45 @@
     var typeEl = document.getElementById("type");
     var seg = document.getElementById("scopeSeg");
     var scope = "all";
+    var typeChosen = false;
+    var kindEl = document.getElementById("scopeKind");
+    var errorEl = document.getElementById("searchError");
+    var destination = document.getElementById("destination");
     var output = document.getElementById("output");
     var genLink = document.getElementById("genLink");
 
+    function invalidate() {
+      output.style.display = "none";
+      errorEl.hidden = true;
+      userEl.removeAttribute("aria-invalid");
+    }
+    function updateKind() {
+      var repo = kindEl.value === "repo";
+      document.getElementById("userLabel").textContent = repo ? "Repository" : (kindEl.value === "org" ? "Organization" : "Username");
+      userEl.placeholder = repo ? "e.g. acme-corp/project" : (kindEl.value === "org" ? "e.g. acme-corp" : "e.g. octocat");
+      invalidate();
+    }
+    kindEl.addEventListener("change", updateKind);
+    qEl.addEventListener("input", invalidate);
+    userEl.addEventListener("input", invalidate);
+    function updateTypeHint() {
+      document.getElementById("typeHint").textContent = typeEl.value === "code" ?
+        "Search inside files. GitHub requires sign-in, and results depend on the recipient's repository access." :
+        (typeEl.value === "repositories" ? "Find repositories by name, description, or topics. Choose Code to search inside files." : "Search GitHub " + TYPE_LABELS[typeEl.value].toLowerCase() + ".");
+      invalidate();
+    }
+    typeEl.addEventListener("change", function () {
+      typeChosen = true;
+      updateTypeHint();
+    });
     seg.addEventListener("click", function (e) {
       var b = e.target.closest("button");
       if (!b) return;
       scope = b.getAttribute("data-scope");
       Array.prototype.forEach.call(seg.children, function (c) { c.classList.toggle("active", c === b); });
       userWrap.style.display = scope === "user" ? "" : "none";
+      if (!typeChosen) typeEl.value = scope === "user" ? "code" : "repositories";
+      updateTypeHint();
     });
 
     function makeLink() {
@@ -354,7 +417,19 @@
       if (!q) { qEl.focus(); return null; }
       var params = new URLSearchParams();
       params.set("q", q);
-      if (scope === "user" && USER_RE.test(userEl.value.trim())) params.set("u", userEl.value.trim());
+      if (scope === "user") {
+        try {
+          var selected = parseScope(userEl.value, kindEl.value);
+          params.set("u", selected.value);
+          params.set("s", selected.kind);
+        } catch (err) {
+          errorEl.textContent = err.message;
+          errorEl.hidden = false;
+          userEl.setAttribute("aria-invalid", "true");
+          userEl.focus();
+          return null;
+        }
+      }
       params.set("t", typeEl.value);
       var base = window.location.origin + window.location.pathname;
       return base + "?" + params.toString();
@@ -364,6 +439,9 @@
       var link = makeLink();
       if (!link) return;
       genLink.value = link;
+      var data = getParams(new URL(link).search);
+      destination.href = buildGithubUrl(data.q, data.user, data.type, data.kind);
+      destination.textContent = new URL(destination.href).searchParams.get("q") + " · " + TYPE_LABELS[data.type];
       output.style.display = "block";
       document.getElementById("copiedMsg").style.display = "none";
       output.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -377,8 +455,7 @@
     });
 
     document.getElementById("previewBtn").addEventListener("click", function () {
-      var p = new URLSearchParams(genLink.value.split("?")[1]);
-      runPlayer({ q: p.get("q"), user: p.get("u") || "", type: p.get("t") || "repositories" }, true);
+      runPlayer(getParams(new URL(genLink.value).search), true);
     });
 
     qEl.addEventListener("keydown", function (e) { if (e.key === "Enter") document.getElementById("genBtn").click(); });
@@ -433,9 +510,23 @@
     var q = data.q || "";
     var user = data.user || "";
     var type = data.type || "repositories";
-    var targetUrl = buildGithubUrl(q, user, type);
+    var targetUrl;
+    var playerScope;
+    try {
+      if (user || data.kind) playerScope = parseScope(user, data.kind || "user");
+      targetUrl = buildGithubUrl(q, user, type, data.kind);
+    } catch (err) {
+      scopePill.textContent = "Invalid scope";
+      bigText.textContent = "This search link needs fixing.";
+      smallText.textContent = err.message;
+      document.getElementById("skipBtn").textContent = "Create a new search link →";
+      document.getElementById("skipBtn").onclick = function () {
+        window.location.href = window.location.origin + window.location.pathname;
+      };
+      return;
+    }
 
-    scopePill.textContent = user ? ("in " + user + "'s repos") : "All of GitHub";
+    scopePill.textContent = playerScope ? playerScope.kind + ":" + playerScope.value : "All of GitHub";
 
     var line = pickLine(q + type);
 
@@ -509,7 +600,7 @@
   }
 
   /* ---------------- BOOT ---------------- */
-  var params = getParams();
+  var params = getParams(window.location.search);
   if (params.q) {
     // Player mode
     document.getElementById("creator").style.display = "none";
